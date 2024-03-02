@@ -1,0 +1,36 @@
+version: 2.1
+
+executors:
+  docker:
+    docker:
+      - image: cimg/rust:1.70.0
+  arm:
+    machine:
+      image: ubuntu-2004:current 
+    resource_class: arm.medium
+    environment:
+      INSTALL_RUSTUP: "1"
+
+jobs:
+  test:
+    parameters:
+      executor:
+        type: executor
+      version:
+        type: string
+    executor: << parameters.executor >>
+    environment:
+      RUSTUP_VERSION: << parameters.version >>
+    steps:
+      - checkout
+      - run: if [ -n "$INSTALL_RUSTUP" ]; then curl https://sh.rustup.rs -sSf | sh -s -- -y; fi
+      - run: rustup default 1.70.0
+      - run: cargo test
+
+workflows:
+  build_and_test:
+    jobs:
+      - build_and_test:
+          matrix:
+            parameters:
+              executor: [docker, arm]

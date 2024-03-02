@@ -1,0 +1,10 @@
+[package]
+name = "fn_num_types"
+version = "0.0.1-dev"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tdelmas/fn_num_types"
+rust-version = "1.70"
+readme = "./README.md"
+
+[dependencies]
