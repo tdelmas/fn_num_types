@@ -9,26 +9,19 @@ executors:
       image: ubuntu-2004:current 
     resource_class: arm.medium
     environment:
-      INSTALL_RUSTUP: "1"
+      RUSTUP_VERSION: 1.70.0
 
 jobs:
-  test:
-    parameters:
-      executor:
-        type: executor
-    executor: << parameters.executor >>
-    environment:
-      RUSTUP_VERSION: 
+  test-docker:
+    executor: docker
     steps:
       - checkout
-      - run: if [ -n "$INSTALL_RUSTUP" ]; then curl https://sh.rustup.rs -sSf | sh -s -- -y; fi
-      - run: rustup default 1.70.0
       - run: cargo test
 
-workflows:
-  test:
-    jobs:
-      - test:
-          matrix:
-            parameters:
-              executor: [docker, arm]
+jobs:
+  test-arm:
+    executor: arm
+    steps:
+      - checkout
+      - run: curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - run: cargo test
