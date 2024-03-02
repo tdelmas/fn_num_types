@@ -28,9 +28,9 @@ jobs:
       - run: cargo test
 
 workflows:
-  build_and_test:
+  test:
     jobs:
-      - build_and_test:
+      - test:
           matrix:
             parameters:
               executor: [docker, arm]
