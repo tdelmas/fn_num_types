@@ -16,11 +16,9 @@ jobs:
     parameters:
       executor:
         type: executor
-      version:
-        type: string
     executor: << parameters.executor >>
     environment:
-      RUSTUP_VERSION: << parameters.version >>
+      RUSTUP_VERSION: 
     steps:
       - checkout
       - run: if [ -n "$INSTALL_RUSTUP" ]; then curl https://sh.rustup.rs -sSf | sh -s -- -y; fi
