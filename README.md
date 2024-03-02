@@ -1,1 +1,1 @@
-# fn_num_types
+This crate contains the utils to know the kind of number a function can return.
