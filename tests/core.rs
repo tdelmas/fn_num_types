@@ -82,20 +82,20 @@ macro_rules! generate_tests {
         fn test_op(name: &str, op: fn($float) -> $float, ty: fn(&FnArg) -> FnArg) {
             let possibles = get_possibilities();
             let values = get_test_values!($float);
-        
+
             for v in values.iter() {
                 for p in possibles.iter() {
                     if !p.accept(*v) {
                         continue;
                     }
-        
+
                     let result = op(*v);
                     let res_p = ty(&FnArg::$mod(*p));
-        
+
                     println!("Testing {name}");
                     println!("Testing {v:?} = {result:?}");
                     println!("Testing {p:?} = {res_p:?}");
-        
+
                     match res_p {
                         FnArg::$mod(res_p) => {
                             assert!(res_p.accept(result));
@@ -105,7 +105,7 @@ macro_rules! generate_tests {
                 }
             }
         }
-        
+
         macro_rules! test_op {
             ($op:ident) => {
                 test_op(stringify!($op), |x| x.$op(), fn_num_types::core::ops::$op);
@@ -147,7 +147,7 @@ macro_rules! generate_tests {
             test_op!(recip);
             test_op("powi", |x| x.powi(2), |x| fn_num_types::core::ops::powi(x));
         }
-    }
+    };
 }
 
 // mod f32 {
