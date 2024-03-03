@@ -14,3 +14,8 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy
       - run: cargo test
+      - uses: actions-rs/grcov@v0.1
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: tdelmas/fn_num_types
