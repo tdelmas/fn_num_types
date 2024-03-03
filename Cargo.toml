@@ -1,5 +1,6 @@
 [package]
 name = "fn_num_types"
+description = "Compute the return type of mathematical functions depending on the arguments."
 version = "0.0.1-dev"
 edition = "2021"
 license = "MIT OR Apache-2.0"

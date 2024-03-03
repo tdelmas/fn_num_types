@@ -12,7 +12,7 @@ pub enum Possible {
     Yes,
     // Theorically yes, but may not happen because of the rounding error
     Should,
-    // Theorically no, byt may happen because of the rounding error
+    // Theorically no, but may happen because of the rounding error
     ShouldNot,
     No,
 }
