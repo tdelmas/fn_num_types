@@ -6,40 +6,15 @@ pub enum Range {
     Positive,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum Possible {
-    #[default]
-    Yes,
-    // Theorically yes, but may not happen because of the rounding error
-    Should,
+    No,
     // Theorically no, but may happen because of the rounding error
     ShouldNot,
-    No,
-}
-
-impl From<Possible> for u8 {
-    fn from(val: Possible) -> Self {
-        match val {
-            Possible::No => 0,
-            Possible::ShouldNot => 1,
-            Possible::Should => 2,
-            Possible::Yes => 3,
-        }
-    }
-}
-
-impl std::cmp::Ord for Possible {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let (lhs, rhs): (u8, u8) = ((*self).into(), (*other).into());
-
-        lhs.cmp(&rhs)
-    }
-}
-
-impl PartialOrd for Possible {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+    // Theorically yes, but may not happen because of the rounding error
+    Should,
+    #[default]
+    Yes,
 }
 
 impl Possible {
