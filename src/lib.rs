@@ -6,6 +6,13 @@ pub enum Range {
     Positive,
 }
 
+/// Is that value possible to reach?
+///
+/// E.g.: If `x` is a floating point strictly positive finite number:
+/// - `x + 1.0 negative ?` is `Possible::No`
+/// - `x + 1.0 positive ?` is `Possible::Yes`
+/// - `x * x == 0.0 ?` is `Possible::ShouldNot` because `f64::MIN_POSITIVE * f64::MIN_POSITIVE == 0.0`
+/// - `sin(x) == 0.0 ?` is `Possible::Should` because mathematically it should be possible, but because of the rounding error, it may not happen
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Ord, PartialOrd)]
 pub enum Possible {
     No,
@@ -118,383 +125,274 @@ impl FloatPossibilities {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum FnArg {
+pub enum FnArgFloat {
     F32(FloatPossibilities),
     F64(FloatPossibilities),
 }
 
-macro_rules! return_possibilities {
-    ($lhs:ident) => {
-        match $lhs {
-            FnArg::F32(lhs) => FnArg::F32(possibilities(lhs)),
-            FnArg::F64(lhs) => FnArg::F64(possibilities(lhs)),
-        }
-    };
+fn return_fp<F>(lhs: &FnArgFloat, possibilities: F) -> FnArgFloat
+where
+    F: FnOnce(&FP) -> FP,
+{
+    match lhs {
+        FnArgFloat::F32(fp) => FnArgFloat::F32(possibilities(fp)),
+        FnArgFloat::F64(fp) => FnArgFloat::F64(possibilities(fp)),
+    }
 }
 
 pub mod core {
     pub mod ops {
         use crate::*;
 
-        pub fn neg(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: lhs.range.opposite(),
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn neg(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: fp.range.opposite(),
+                ..*fp
+            })
         }
 
-        pub fn abs(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: Range::Positive,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn abs(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Positive,
+                ..*fp
+            })
         }
 
-        pub fn ceil(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                let (a, b) = (lhs.zero, lhs.range.can_be_negative());
-
-                FP {
-                    zero: Possible::any(a, b),
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn ceil(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                zero: Possible::any(fp.zero, fp.range.can_be_negative()),
+                ..*fp
+            })
         }
 
-        pub fn floor(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    zero: Possible::any(lhs.zero, lhs.range.can_be_positive()),
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn floor(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                zero: Possible::any(fp.zero, fp.range.can_be_positive()),
+                ..*fp
+            })
         }
 
-        pub fn round(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    zero: Possible::Yes,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn round(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                zero: Possible::Yes,
+                ..*fp
+            })
         }
 
-        pub fn trunc(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    zero: Possible::Yes,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn trunc(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                zero: Possible::Yes,
+                ..*fp
+            })
         }
 
-        pub fn fract(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    zero: Possible::Yes,
-                    nan: Possible::any(lhs.nan, lhs.infinite),
-                    // Returns POSITIVE zero if the factional part is zero
-                    range: if lhs.range.can_be_negative() == Possible::Yes {
-                        Range::Full
-                    } else {
-                        Range::Positive
-                    },
-                    infinite: lhs.infinite,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn fract(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                zero: Possible::Yes,
+                nan: Possible::any(fp.nan, fp.infinite),
+                // Returns POSITIVE zero if the factional part is zero
+                range: if fp.range.can_be_negative() == Possible::Yes {
+                    Range::Full
+                } else {
+                    Range::Positive
+                },
+                infinite: fp.infinite,
+            })
         }
 
-        pub fn signum(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    zero: Possible::No,
-                    infinite: Possible::No,
-                    range: lhs.range,
-                    nan: lhs.nan,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn signum(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                zero: Possible::No,
+                infinite: Possible::No,
+                range: fp.range,
+                nan: fp.nan,
+            })
         }
 
-        pub fn sqrt(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    nan: Possible::any(lhs.nan, lhs.range.can_be_negative()),
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn sqrt(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                nan: Possible::any(fp.nan, fp.range.can_be_negative()),
+                ..*fp
+            })
         }
 
-        pub fn exp(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: Range::Positive,
-                    zero: lhs.range.can_be_negative(),
-                    infinite: lhs.range.can_be_positive(),
-                    nan: lhs.nan,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn exp(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Positive,
+                zero: fp.range.can_be_negative(),
+                infinite: fp.range.can_be_positive(),
+                nan: fp.nan,
+            })
         }
 
-        pub fn exp2(lhs: &FnArg) -> FnArg {
+        pub fn exp2(lhs: &FnArgFloat) -> FnArgFloat {
             exp(lhs)
         }
 
-        pub fn ln(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: Range::Full,
-                    zero: lhs.range.can_be_positive(),
-                    infinite: Possible::any(lhs.infinite, lhs.zero),
-                    nan: Possible::any(lhs.nan, lhs.range.can_be_negative()),
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn ln(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Full,
+                zero: fp.range.can_be_positive(),
+                infinite: Possible::any(fp.infinite, fp.zero),
+                nan: Possible::any(fp.nan, fp.range.can_be_negative()),
+            })
         }
 
-        pub fn log2(lhs: &FnArg) -> FnArg {
+        pub fn log2(lhs: &FnArgFloat) -> FnArgFloat {
             ln(lhs)
         }
 
-        pub fn log10(lhs: &FnArg) -> FnArg {
+        pub fn log10(lhs: &FnArgFloat) -> FnArgFloat {
             ln(lhs)
         }
 
-        pub fn to_degrees(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    // May reach Infinity with large values
-                    infinite: Possible::Yes,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn to_degrees(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                // May reach Infinity with large values
+                infinite: Possible::Yes,
+                ..*fp
+            })
         }
 
-        pub fn to_radians(lhs: &FnArg) -> FnArg {
+        pub fn to_radians(lhs: &FnArgFloat) -> FnArgFloat {
             *lhs
         }
 
-        pub fn cbrt(lhs: &FnArg) -> FnArg {
+        pub fn cbrt(lhs: &FnArgFloat) -> FnArgFloat {
             *lhs
         }
 
-        pub fn sin(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: Range::Full,
-                    zero: Possible::Yes,
-                    infinite: Possible::No,
-                    nan: Possible::any(lhs.nan, lhs.infinite),
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn sin(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Full,
+                zero: Possible::Yes,
+                infinite: Possible::No,
+                nan: Possible::any(fp.nan, fp.infinite),
+            })
         }
 
-        pub fn cos(lhs: &FnArg) -> FnArg {
+        pub fn cos(lhs: &FnArgFloat) -> FnArgFloat {
             sin(lhs)
         }
 
-        pub fn tan(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: Range::Full,
-                    zero: Possible::Yes,
-                    infinite: Possible::Yes,
-                    nan: Possible::any(lhs.nan, lhs.infinite),
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn tan(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Full,
+                zero: Possible::Yes,
+                infinite: Possible::Yes,
+                nan: Possible::any(fp.nan, fp.infinite),
+            })
         }
 
-        pub fn asin(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: lhs.range,
-                    zero: lhs.zero,
-                    infinite: Possible::No,
-                    nan: Possible::Yes,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn asin(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: fp.range,
+                zero: fp.zero,
+                infinite: Possible::No,
+                nan: Possible::Yes,
+            })
         }
 
-        pub fn acos(lhs: &FnArg) -> FnArg {
-            fn possibilities(_lhs: &FP) -> FP {
-                FP {
-                    range: Range::Positive,
-                    zero: Possible::Yes,
-                    infinite: Possible::No,
-                    nan: Possible::Yes,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn acos(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Positive,
+                zero: Possible::Yes,
+                infinite: Possible::No,
+                nan: Possible::Yes,
+            })
         }
 
-        pub fn atan(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    infinite: Possible::No,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn atan(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                infinite: Possible::No,
+                ..*fp
+            })
         }
 
-        pub fn exp_m1(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    infinite: lhs.range.can_be_positive(),
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn exp_m1(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                infinite: fp.range.can_be_positive(),
+                ..*fp
+            })
         }
 
-        pub fn ln_1p(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    nan: Possible::any(lhs.nan, lhs.range.can_be_negative()),
-                    infinite: Possible::any(lhs.infinite, lhs.range.can_be_negative()),
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn ln_1p(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                nan: Possible::any(fp.nan, fp.range.can_be_negative()),
+                infinite: Possible::any(fp.infinite, fp.range.can_be_negative()),
+                ..*fp
+            })
         }
 
-        pub fn sinh(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    infinite: Possible::Yes,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn sinh(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                infinite: Possible::Yes,
+                ..*fp
+            })
         }
 
-        pub fn cosh(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: Range::Positive,
-                    zero: Possible::No,
-                    infinite: Possible::Yes,
-                    nan: lhs.nan,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn cosh(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Positive,
+                zero: Possible::No,
+                infinite: Possible::Yes,
+                nan: fp.nan,
+            })
         }
 
-        pub fn tanh(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    infinite: Possible::No,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn tanh(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                infinite: Possible::No,
+                ..*fp
+            })
         }
 
-        pub fn asinh(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    infinite: Possible::Yes,
-                    ..*lhs
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn asinh(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                infinite: Possible::Yes,
+                ..*fp
+            })
         }
 
-        pub fn acosh(lhs: &FnArg) -> FnArg {
-            fn possibilities(_lhs: &FP) -> FP {
-                FP {
-                    range: Range::Positive,
-                    zero: Possible::Yes,
-                    infinite: Possible::Yes,
-                    nan: Possible::Yes,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn acosh(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: Range::Positive,
+                zero: Possible::Yes,
+                infinite: Possible::Yes,
+                nan: Possible::Yes,
+            })
         }
 
-        pub fn atanh(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: lhs.range,
-                    zero: lhs.zero,
-                    infinite: Possible::Yes,
-                    nan: Possible::Yes,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn atanh(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: fp.range,
+                zero: fp.zero,
+                infinite: Possible::Yes,
+                nan: Possible::Yes,
+            })
         }
 
-        pub fn recip(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: lhs.range,
-                    zero: lhs.infinite,
-                    infinite: lhs.zero,
-                    nan: lhs.nan,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn recip(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: fp.range,
+                zero: fp.infinite,
+                infinite: fp.zero,
+                nan: fp.nan,
+            })
         }
 
         // TODO: add argument
-        pub fn powi(lhs: &FnArg) -> FnArg {
-            fn possibilities(lhs: &FP) -> FP {
-                FP {
-                    range: if lhs.range.can_be_negative() == Possible::Yes {
-                        Range::Full
-                    } else {
-                        Range::Positive
-                    },
-                    zero: Possible::Yes,
-                    infinite: Possible::Yes,
-                    nan: lhs.nan,
-                }
-            }
-
-            return_possibilities!(lhs)
+        pub fn powi(lhs: &FnArgFloat) -> FnArgFloat {
+            return_fp(lhs, |fp| FP {
+                range: if fp.range.can_be_negative() == Possible::Yes {
+                    Range::Full
+                } else {
+                    Range::Positive
+                },
+                zero: Possible::Yes,
+                infinite: Possible::Yes,
+                nan: fp.nan,
+            })
         }
     }
 }

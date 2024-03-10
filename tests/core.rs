@@ -1,4 +1,4 @@
-use fn_num_types::{FloatPossibilities, FnArg, Possible, Range};
+use fn_num_types::{FloatPossibilities, FnArgFloat, Possible, Range};
 
 macro_rules! get_test_values {
     ($float_type:ident) => {
@@ -79,7 +79,7 @@ fn test_values() {
 
 macro_rules! generate_tests {
     ($float:ident, $mod:ident) => {
-        fn test_op(name: &str, op: fn($float) -> $float, ty: fn(&FnArg) -> FnArg) {
+        fn test_op(name: &str, op: fn($float) -> $float, ty: fn(&FnArgFloat) -> FnArgFloat) {
             let possibles = get_possibilities();
             let values = get_test_values!($float);
 
@@ -90,14 +90,14 @@ macro_rules! generate_tests {
                     }
 
                     let result = op(*v);
-                    let res_p = ty(&FnArg::$mod(*p));
+                    let res_p = ty(&FnArgFloat::$mod(*p));
 
                     println!("Testing {name}");
                     println!("Testing {v:?} = {result:?}");
                     println!("Testing {p:?} = {res_p:?}");
 
                     match res_p {
-                        FnArg::$mod(res_p) => {
+                        FnArgFloat::$mod(res_p) => {
                             assert!(res_p.accept(result));
                         }
                         _ => panic!("Invalid result"),
