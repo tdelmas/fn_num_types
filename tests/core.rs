@@ -1,4 +1,4 @@
-use fn_num_types::{FloatPossibilities, FnArgFloat, Possible, Range};
+use fn_num_types::{FloatPossibilities, FnArgFloat, Possible};
 
 macro_rules! get_test_values {
     ($float_type:ident) => {
@@ -13,10 +13,10 @@ macro_rules! get_test_values {
             -core::$float_type::consts::FRAC_PI_2,
             -1.0,
             -core::$float_type::MIN_POSITIVE,
-            -1.0e-308,
+            -1.0e-308, // Smallest negative subnormal. Rounded to zero for f32
             -0.0,
             0.0,
-            1.0e-308,
+            1.0e-308, // Smallest positive subnormal. Rounded to zero for f32
             core::$float_type::MIN_POSITIVE,
             1.0,
             core::$float_type::consts::FRAC_PI_2,
@@ -31,7 +31,6 @@ macro_rules! get_test_values {
 }
 
 const YESNO: [Possible; 2] = [Possible::Yes, Possible::No];
-const RANGES: [Range; 3] = [Range::Full, Range::Positive, Range::Negative];
 
 fn get_possibilities() -> Vec<FloatPossibilities> {
     let mut possibles = vec![];
@@ -39,13 +38,16 @@ fn get_possibilities() -> Vec<FloatPossibilities> {
     for nan in YESNO {
         for zero in YESNO {
             for infinite in YESNO {
-                for range in RANGES {
-                    possibles.push(FloatPossibilities {
-                        nan,
-                        zero,
-                        infinite,
-                        range,
-                    });
+                for positive in YESNO {
+                    for negative in YESNO {
+                        possibles.push(FloatPossibilities {
+                            nan,
+                            zero,
+                            infinite,
+                            positive,
+                            negative,
+                        });
+                    }
                 }
             }
         }
@@ -106,11 +108,50 @@ macro_rules! generate_tests {
             }
         }
 
+        fn test_op2(
+            name: &str,
+            op: fn($float, $float) -> $float,
+            ty: fn(&FnArgFloat, &FnArgFloat) -> FnArgFloat,
+        ) {
+            let possibles = get_possibilities();
+            let values = get_test_values!($float);
+
+            for v1 in values.iter() {
+                for p1 in possibles.iter() {
+                    if !p1.accept(*v1) {
+                        continue;
+                    }
+                    for v2 in values.iter() {
+                        for p2 in possibles.iter() {
+                            if !p2.accept(*v2) {
+                                continue;
+                            }
+
+                            let result = op(*v1, *v2);
+                            let res_p = ty(&FnArgFloat::$mod(*p1), &FnArgFloat::$mod(*p2));
+
+                            println!("Testing {name}");
+                            println!("Testing {v1:?} {v2:?} = {result:?}");
+                            println!("Testing {p1:?} {p2:?} = {res_p:?}");
+
+                            match res_p {
+                                FnArgFloat::$mod(res_p) => {
+                                    assert!(res_p.accept(result));
+                                }
+                                _ => panic!("Invalid result"),
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         macro_rules! test_op {
             ($op:ident) => {
                 test_op(stringify!($op), |x| x.$op(), fn_num_types::core::ops::$op);
             };
         }
+
         #[test]
         fn test_ops() {
             test_op("neg", |x| -x, fn_num_types::core::ops::neg);
@@ -146,6 +187,15 @@ macro_rules! generate_tests {
             test_op!(atanh);
             test_op!(recip);
             test_op("powi", |x| x.powi(2), |x| fn_num_types::core::ops::powi(x));
+        }
+
+        #[test]
+        fn test_ops2() {
+            test_op2(
+                "add",
+                |x, y| x + y,
+                |x, y| fn_num_types::core::ops::add(x, y),
+            );
         }
     };
 }
